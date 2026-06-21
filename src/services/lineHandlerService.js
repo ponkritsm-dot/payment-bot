@@ -64,6 +64,7 @@ async function handlePostback(event) {
 
 async function handleTextMessage(event) {
   const userId = event.source.userId;
+  console.log('[Debug] groupId:', event.source.groupId, 'userId:', event.source.userId);
   const text = event.message.text?.trim();
   if (pendingNextDate[userId]) {
     const { billNo, customer, dept, reason, sheetName } = pendingNextDate[userId];
