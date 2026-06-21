@@ -16,7 +16,7 @@ async function sendToGroup(messages) {
 }
 
 async function sendToOwner(messages) {
-  const ownerId = process.env.OWNER_LINE_USER_ID;
+const ownerId = process.env.LINE_OWNER_ID;
   if (!ownerId) return;
   const msgArray = Array.isArray(messages) ? messages : [messages];
   try {
