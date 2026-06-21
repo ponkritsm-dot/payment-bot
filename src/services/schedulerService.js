@@ -3,7 +3,7 @@ const dayjs = require('dayjs');
 const customParseFormat = require('dayjs/plugin/customParseFormat');
 dayjs.extend(customParseFormat);
 
-const { COL, getAllRows, updateRow } = require('./sheetsService');
+const { COL, getAllRows, updateRow } = require('./sheetService');
 const { sendToGroup, sendToOwner, buildReminderMessage } = require('./lineMessageService');
 
 const SHEET_NAME = process.env.SHEET_NAME || 'การตอบแบบฟอร์ม 1';
