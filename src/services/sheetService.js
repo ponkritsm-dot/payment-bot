@@ -9,7 +9,7 @@ const auth = new google.auth.GoogleAuth({
 });
 
 const sheets = google.sheets({ version: 'v4', auth });
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+const SHEET_ID = process.env.SPREADSHEET_ID;
 
 const COL = {
   TIMESTAMP: 0, SALES_NAME: 1, DEPARTMENT: 2, BILL_NO: 3, CUSTOMER: 4,
