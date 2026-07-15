@@ -23,7 +23,7 @@ async function getAllRows(sheetName) {
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: `${sheetName}!A2:T`,
+      range: `'${sheetName}'!A2:T`,
     });
     return res.data.values || [];
   } catch (err) {
@@ -37,12 +37,12 @@ async function updateRow(sheetName, rowIndex, status, reason = '', nextDate = ''
   try {
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
-      range: `${sheetName}!Q${rowNum}:T${rowNum}`,
+      range: `'${sheetName}'!Q${rowNum}:T${rowNum}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [[status, reason, nextDate, notified]] },
     });
   } catch (err) {
-    console.error('Error updating row:', err.message);
+    console.'error('Error updating row:', err.message);
   }
 }
 
