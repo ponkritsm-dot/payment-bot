@@ -1,3 +1,4 @@
+process.env.NODE_OPTIONS = '--openssl-legacy-provider';
 const { google } = require('googleapis');
 
 const auth = new google.auth.GoogleAuth({
