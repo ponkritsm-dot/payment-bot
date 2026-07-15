@@ -42,7 +42,7 @@ async function updateRow(sheetName, rowIndex, status, reason = '', nextDate = ''
       requestBody: { values: [[status, reason, nextDate, notified]] },
     });
   } catch (err) {
-    console.'error('Error updating row:', err.message);
+    console.error('Error updating row:', err.message);
   }
 }
 
