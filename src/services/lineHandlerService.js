@@ -5,6 +5,10 @@ const { sendToGroup, buildFurnitureVerificationMessage, buildInteriorVerificatio
 const pendingNextDate = {};
 const SHEET_NAME = process.env.SHEET_NAME || 'การตอบแบบฟอร์ม 1';
 
+function sleep(ms) {
+  return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
 async function processNewSheetRows(sheetName, department) {
   const unprocessed = await getUnprocessedRows(sheetName);
   for (const { row, index } of unprocessed) {
@@ -41,6 +45,8 @@ async function processNewSheetRows(sheetName, department) {
       await sendToGroup({ type: 'text', text: `⚠️ ไม่สามารถตรวจสอบบิล ${formData.billNo} ได้` });
       await updateRow(sheetName, index, 'ตรวจไม่ได้-error');
     }
+
+    await sleep(1500);
   }
 }
 
