@@ -3,16 +3,29 @@ const axios = require('axios');
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function toDirectDriveUrl(url) {
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (match) {
+    return `https://drive.google.com/uc?export=download&id=${match[1]}`;
+  }
+  return url;
+}
+
 async function fetchImageAsBase64(url) {
   try {
-    const response = await axios.get(url, {
+    const directUrl = toDirectDriveUrl(url);
+    const response = await axios.get(directUrl, {
       responseType: 'arraybuffer',
       timeout: 15000,
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });
+    const contentType = (response.headers['content-type'] || '').split(';')[0];
+    if (!contentType.startsWith('image/')) {
+      console.error('Skipping non-image content:', url, contentType);
+      return null;
+    }
     const base64 = Buffer.from(response.data).toString('base64');
-    const contentType = response.headers['content-type'] || 'image/jpeg';
-    return { base64, contentType: contentType.split(';')[0] };
+    return { base64, contentType };
   } catch (err) {
     console.error('Error fetching image:', err.message);
     return null;
