@@ -1,5 +1,5 @@
-const { COL, getAllRows, updateRow, getUnprocessedRows } = require('./sheetService');
-const { verifyFurnitureBill, verifyInteriorBill } = require('./visionService');
+const { COL, getAllRows, updateRow, getUnprocessedRows, getRowsByBillNo } = require('./sheetService');
+const { verifyFurnitureBill } = require('./visionService');
 const { sendToGroup, buildFurnitureVerificationMessage, buildInteriorVerificationMessage, buildAskNextDateMessage } = require('./lineMessageService');
 
 const pendingNextDate = {};
@@ -7,6 +7,41 @@ const SHEET_NAME = process.env.SHEET_NAME || 'การตอบแบบฟอ�
 
 function sleep(ms) {
   return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
+function computeInteriorSummary(formData, historyRows) {
+  const slots = { '1': null, '2': null, '3': null };
+  const extras = [];
+
+  for (const { row } of historyRows) {
+    const instRaw = String(row[COL.INSTALLMENT_NO] || '').trim();
+    const date = row[COL.TIMESTAMP] || '';
+    const amount = Number(row[COL.PAID_AMOUNT]) || 0;
+    if (instRaw === '1' || instRaw === '2' || instRaw === '3') {
+      slots[instRaw] = { date, amount };
+    } else {
+      extras.push({ label: instRaw || 'อื่นๆ', date, amount });
+    }
+  }
+
+  const totalDue = Number(formData.amount || 0) + Number(formData.vat || 0) + Number(formData.shipping || 0);
+  const slotSum = ['1', '2', '3'].reduce((sum, k) => sum + (slots[k] ? slots[k].amount : 0), 0);
+  const extraSum = extras.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const sumReceived = slotSum + extraSum;
+  const tolerance = Math.max(500, totalDue * 0.02);
+  const diff = totalDue - sumReceived;
+  const allThreeReceived = ['1', '2', '3'].every((k) => slots[k]);
+
+  let statusKey;
+  if (diff < -tolerance) {
+    statusKey = 'mismatch';
+  } else if (allThreeReceived) {
+    statusKey = Math.abs(diff) <= tolerance ? 'complete' : 'mismatch';
+  } else {
+    statusKey = 'waiting';
+  }
+
+  return { slots, extras, totalDue, sumReceived, diff, tolerance, statusKey, allThreeReceived };
 }
 
 async function processNewSheetRows(sheetName, department) {
@@ -26,19 +61,25 @@ async function processNewSheetRows(sheetName, department) {
     await sendToGroup({ type: 'text', text: `🔍 กำลังตรวจสอบ...\nบิล ${formData.billNo} | ${formData.customer}\nงวดที่ ${formData.installmentNo}` });
 
     try {
-      const isFurniture = !String(formData.department).includes('ตกแต่ง');
-      let result, verifyMsg;
+      const isFurniture = !String(formData.department).includes('บิ้วท์อิน');
+      let verifyMsg, newStatus;
+
       if (isFurniture) {
-        result = await verifyFurnitureBill(formData.billUrl, formData.slipUrl, formData);
+        const result = await verifyFurnitureBill(formData.billUrl, formData.slipUrl, formData);
         verifyMsg = buildFurnitureVerificationMessage(formData, result);
+        const issues = result?.verification?.issues || [];
+        const amountMatch = result?.verification?.amountMatch;
+        newStatus = amountMatch && issues.length === 0 ? 'ตรวจแล้ว-ถูกต้อง' : 'ตรวจแล้ว-มีปัญหา';
       } else {
-        result = await verifyInteriorBill(formData.billUrl, formData.slipUrl, formData);
-        verifyMsg = buildInteriorVerificationMessage(formData, result);
+        const history = await getRowsByBillNo(sheetName, formData.billNo, formData.customer);
+        const summary = computeInteriorSummary(formData, history);
+        verifyMsg = buildInteriorVerificationMessage(formData, summary);
+        newStatus = summary.statusKey === 'complete' ? 'ตรวจแล้ว-ถูกต้อง'
+          : summary.statusKey === 'waiting' ? 'รอชำระงวดถัดไป'
+          : 'ตรวจแล้ว-มีปัญหา';
       }
+
       await sendToGroup(verifyMsg);
-      const issues = result?.verification?.issues || [];
-      const amountMatch = result?.verification?.amountMatch;
-      const newStatus = amountMatch && issues.length === 0 ? 'ตรวจแล้ว-ถูกต้อง' : 'ตรวจแล้ว-มีปัญหา';
       await updateRow(sheetName, index, newStatus);
     } catch (err) {
       console.error(`[Process] Error:`, err.message);
