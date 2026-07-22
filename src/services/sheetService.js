@@ -59,4 +59,17 @@ async function getPendingPayments(sheetName) {
   });
 }
 
-module.exports = { COL, getAllRows, updateRow, getUnprocessedRows, getPendingPayments };
+async function getRowsByBillNo(sheetName, billNo, customer) {
+  const rows = await getAllRows(sheetName);
+  const targetBill = String(billNo || '').trim();
+  const targetCustomer = String(customer || '').trim();
+  return rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => {
+      const rowBill = String(row[COL.BILL_NO] || '').trim();
+      const rowCustomer = String(row[COL.CUSTOMER] || '').trim();
+      return rowBill === targetBill && rowCustomer === targetCustomer;
+    });
+}
+
+module.exports = { COL, getAllRows, updateRow, getUnprocessedRows, getPendingPayments, getRowsByBillNo };
