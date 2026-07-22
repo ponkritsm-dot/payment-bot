@@ -1,5 +1,5 @@
 const { COL, getAllRows, updateRow, getUnprocessedRows, getRowsByBillNo } = require('./sheetService');
-const { verifyFurnitureBill } = require('./visionService');
+const { verifyFurnitureBill, detectDepartmentFromBill } = require('./visionService');
 const { sendToGroup, buildFurnitureVerificationMessage, buildInteriorVerificationMessage, buildAskNextDateMessage } = require('./lineMessageService');
 
 const pendingNextDate = {};
@@ -44,6 +44,24 @@ function computeInteriorSummary(formData, historyRows) {
   return { slots, extras, totalDue, sumReceived, diff, tolerance, statusKey, allThreeReceived };
 }
 
+async function resolveDepartment(formData) {
+  const sheetIsFurniture = !String(formData.department).includes('บิ้วท์อิน');
+  const detection = formData.billUrl ? await detectDepartmentFromBill(formData.billUrl) : { detectedDept: 'unknown' };
+
+  let isFurniture = sheetIsFurniture;
+  let mismatchNote = '';
+
+  if (detection.detectedDept === 'interior' && sheetIsFurniture) {
+    isFurniture = false;
+    mismatchNote = `⚠️ ฟอร์มระบุแผนกเฟอร์นิเจอร์ แต่ตรวจจากรูปบิลพบรูปแบบของแผนกบิ้วท์อิน (มีงวดที่ 1/2/3) ระบบใช้ผลจากรูปบิลแทน กรุณาตรวจสอบข้อมูลในฟอร์ม`;
+  } else if (detection.detectedDept === 'furniture' && !sheetIsFurniture) {
+    isFurniture = true;
+    mismatchNote = `⚠️ ฟอร์มระบุแผนกบิ้วท์อิน แต่ตรวจจากรูปบิลพบรูปแบบของแผนกเฟอร์นิเจอร์ (มัดจำ/ยอดคงเหลือ) ระบบใช้ผลจากรูปบิลแทน กรุณาตรวจสอบข้อมูลในฟอร์ม`;
+  }
+
+  return { isFurniture, mismatchNote, detectedDept: detection.detectedDept };
+}
+
 async function processNewSheetRows(sheetName, department) {
   const unprocessed = await getUnprocessedRows(sheetName);
   for (const { row, index } of unprocessed) {
@@ -61,7 +79,7 @@ async function processNewSheetRows(sheetName, department) {
     await sendToGroup({ type: 'text', text: `🔍 กำลังตรวจสอบ...\nบิล ${formData.billNo} | ${formData.customer}\nงวดที่ ${formData.installmentNo}` });
 
     try {
-      const isFurniture = !String(formData.department).includes('บิ้วท์อิน');
+      const { isFurniture, mismatchNote } = await resolveDepartment(formData);
       let verifyMsg, newStatus;
 
       if (isFurniture) {
@@ -79,6 +97,9 @@ async function processNewSheetRows(sheetName, department) {
           : 'ตรวจแล้ว-มีปัญหา';
       }
 
+      if (mismatchNote) {
+        await sendToGroup({ type: 'text', text: mismatchNote });
+      }
       await sendToGroup(verifyMsg);
       await updateRow(sheetName, index, newStatus);
     } catch (err) {
