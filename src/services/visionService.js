@@ -32,6 +32,32 @@ async function fetchImageAsBase64(url) {
   }
 }
 
+async function detectDepartmentFromBill(billUrl) {
+  if (!billUrl) return { detectedDept: 'unknown', reason: 'no bill image' };
+  const billImg = await fetchImageAsBase64(billUrl);
+  if (!billImg) return { detectedDept: 'unknown', reason: 'image not readable' };
+
+  const content = [
+    { type: 'image', source: { type: 'base64', media_type: billImg.contentType, data: billImg.base64 } },
+    { type: 'text', text: `นี่คือบิลสั่งซื้อของบริษัท ทานตะวัน แอนด์ พลกฤต เฟอร์นิเจอร์ ซึ่งมี 2 แผนก คือ บิ้วท์อิน กับ เฟอร์นิเจอร์ลอยตัว บิลของทั้งสองแผนกไม่มีคำว่า "บิ้วท์อิน" หรือ "เฟอร์นิเจอร์" เขียนไว้ตรงๆ ต้องดูจากรูปแบบบิลแทน โดยสังเกตจาก:
+- บิลแผนกบิ้วท์อิน: ตารางรายการสินค้ามีคอลัมน์ขนาด 3 มิติคือ กว้าง, สูง, ลึก (แยกกัน 3 ช่อง หน่วย cm) และช่องมุมล่างขวาของบิลแบ่งการชำระเป็น 3 งวด เขียนว่า "งวดที่ 1 40%" "งวดที่ 2 40%" "งวดที่ 3 20%"
+- บิลแผนกเฟอร์นิเจอร์ลอยตัว: ตารางรายการสินค้ามีคอลัมน์ ขนาด (กว้าง/ลึก), รหัสสี, สเปคเบาะ, จำนวนหมอน/สี, ขา และช่องมุมล่างขวามีแค่ "มัดจำ" กับ "ยอดคงเหลือ" (ไม่มีคำว่างวดที่ 1/2/3)
+ดูจากรูปแบบตารางและช่องมุมล่างขวาแล้วตอบ JSON อย่างเดียว:
+{"detectedDept":"interior","reason":""} หรือ {"detectedDept":"furniture","reason":""} หรือ {"detectedDept":"unknown","reason":""}` },
+  ];
+
+  try {
+    const response = await client.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 300, messages: [{ role: 'user', content }] });
+    const text = response.content[0].text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    return { detectedDept: 'unknown', reason: 'no_json' };
+  } catch (err) {
+    console.error('Vision API error (detectDepartmentFromBill):', err.message);
+    return { detectedDept: 'unknown', reason: err.message };
+  }
+}
+
 async function verifyFurnitureBill(billUrl, slipUrl, formData) {
   const content = [];
   const billImg = billUrl ? await fetchImageAsBase64(billUrl) : null;
@@ -93,4 +119,4 @@ async function verifyInteriorBill(billUrl, slipUrl, formData) {
   }
 }
 
-module.exports = { verifyFurnitureBill, verifyInteriorBill };
+module.exports = { verifyFurnitureBill, verifyInteriorBill, detectDepartmentFromBill };
